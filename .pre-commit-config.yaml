@@ -1,0 +1,49 @@
+# Local quality gate. Install once with `uv run pre-commit install`.
+# Project hooks run through `uv run`, so they use the exact tool versions pinned in uv.lock.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+      - id: detect-private-key
+
+  - repo: local
+    hooks:
+      - id: uv-lock
+        name: uv lock --check
+        entry: uv lock --check
+        language: system
+        files: ^(pyproject\.toml|uv\.lock)$
+        pass_filenames: false
+
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix
+        language: system
+        types: [python]
+
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types: [python]
+
+      - id: mypy
+        name: mypy (strict)
+        entry: uv run mypy .
+        language: system
+        files: ^(src/.*\.py|tests/.*\.py|pyproject\.toml|uv\.lock)$
+        pass_filenames: false
+
+      - id: pytest
+        name: pytest
+        entry: uv run pytest
+        language: system
+        files: ^(src/.*\.py|tests/.*\.py|pyproject\.toml|uv\.lock)$
+        pass_filenames: false

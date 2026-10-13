@@ -60,9 +60,16 @@ Requires [uv](https://docs.astral.sh/uv/) and Python 3.12+.
 
 ```bash
 uv sync
-uv run ruff check . && uv run ruff format --check .
-uv run mypy .
-uv run pytest
+uv run pre-commit install   # once per clone
+```
+
+Every commit then runs the quality gate defined in `.pre-commit-config.yaml`: file hygiene (whitespace, YAML/TOML,
+merge markers, large files, private keys), `uv lock --check`, `ruff check --fix`, `ruff format`, strict `mypy` and
+`pytest`. The project hooks run through `uv run`, so they use the exact versions pinned in `uv.lock`.
+
+```bash
+uv run pre-commit run --all-files                      # whole gate, e.g. before pushing
+uv run pytest --cov=uncertainty_judge --cov-report=term-missing   # coverage report
 ```
 
 ## Open questions
