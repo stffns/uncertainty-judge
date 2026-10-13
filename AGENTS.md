@@ -8,6 +8,8 @@ Rules for AI agents working in this repository. The design in `docs/training-des
 - Pydantic v2 for every contract between components. Contracts are frozen and forbid unknown fields.
 - Strict typing: `uv run mypy .` must pass in strict mode.
 - `uv run ruff check .` and `uv run ruff format --check .` must pass.
+- The pre-commit hooks are the quality gate. Run `uv run pre-commit install` after cloning and
+  `uv run pre-commit run --all-files` before every push. Never bypass them with `--no-verify`.
 - Every module and public function has a docstring. Every rule from the design has a test.
 
 ## Non-negotiable design rules

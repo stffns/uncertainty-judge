@@ -19,6 +19,7 @@ from uncertainty_judge.contracts import (
 )
 
 NOW = datetime(2026, 10, 13, tzinfo=UTC)
+SHA = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
 
 
 def _signals(**overrides: object) -> FindingSignals:
@@ -66,6 +67,7 @@ def test_finding_record_computes_severity_shift() -> None:
     record = FindingRecord(
         pr_id="pr-1",
         finding_id="f-1",
+        head_sha=SHA,
         decided_at=NOW,
         reviewer_severity=Severity.NIT,
         final_severity=Severity.MEDIUM,
@@ -73,6 +75,31 @@ def test_finding_record_computes_severity_shift() -> None:
     )
     assert record.severity_shift == 2
     assert record.model_dump()["severity_shift"] == 2
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("decided_at", datetime(2026, 10, 13)),
+        ("head_sha", "not-a-sha"),
+        ("head_sha", "a1b2c3d"),
+        ("head_sha", SHA.upper()),
+    ],
+)
+def test_finding_record_rejects_ambiguous_time_and_commit(field: str, value: object) -> None:
+    """Naive timestamps break the time split, and a decision must name the commit it was made on."""
+    data: dict[str, object] = {
+        "pr_id": "pr-1",
+        "finding_id": "f-1",
+        "head_sha": SHA,
+        "decided_at": NOW,
+        "reviewer_severity": Severity.NIT,
+        "final_severity": Severity.NIT,
+        "signals": _signals(),
+        field: value,
+    }
+    with pytest.raises(ValidationError):
+        FindingRecord.model_validate(data)
 
 
 def test_zone_signals_reject_negative_counts() -> None:
