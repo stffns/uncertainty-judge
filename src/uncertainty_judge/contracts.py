@@ -130,8 +130,13 @@ class FindingOutcome(StrEnum):
 
 
 class FindingLabel(Contract):
-    """Outcome label for a finding-mode row. Labels come from real outcomes, never from another model."""
+    """Outcome label for a finding-mode row. Labels come from real outcomes, never from another model.
 
+    ``pr_id``, ``head_sha`` and ``finding_id`` together identify the decision the label belongs to.
+    """
+
+    pr_id: str = Field(min_length=1)
+    head_sha: CommitSha
     finding_id: str = Field(min_length=1)
     outcome: FindingOutcome
     severity_gap: SeverityGap | None = Field(
@@ -171,8 +176,13 @@ class ZoneOutcome(StrEnum):
 
 
 class ZoneLabel(Contract):
-    """Outcome label for a zone-mode row."""
+    """Outcome label for a zone-mode row.
 
+    ``pr_id``, ``head_sha`` and ``zone_id`` together identify the decision; a zone id alone repeats across PRs.
+    """
+
+    pr_id: str = Field(min_length=1)
+    head_sha: CommitSha
     zone_id: str = Field(min_length=1)
     outcome: ZoneOutcome
     labeled_at: AwareDatetime
@@ -182,6 +192,14 @@ class ZoneLabel(Contract):
     def has_unreported_bug(self) -> bool:
         """Binary target: 1 when a real or seeded bug in the zone went unreported by the review."""
         return self.outcome in (ZoneOutcome.ESCAPED_BUG, ZoneOutcome.MUTANT_MISSED)
+
+
+class MergeRecord(Contract):
+    """A merged pull request. Its merge time starts the observation window of the decisions made on its final head."""
+
+    pr_id: str = Field(min_length=1)
+    head_sha: CommitSha = Field(description="PR head commit at merge time; earlier heads never shipped.")
+    merged_at: AwareDatetime
 
 
 class JudgeScore(Contract):

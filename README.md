@@ -21,7 +21,7 @@ Full design: [`docs/training-design.md`](docs/training-design.md).
 | Contracts (signals, records, labels, scores) | Done, tested |
 | Routing policy (per-severity thresholds) | Done, tested; thresholds still to tune |
 | Decision log (signals at decision time) | Done, tested; not yet wired into the pipeline |
-| Labeled dataset + time split | Blocked on open questions |
+| Labeled dataset + time split | Done, tested; window length pending (#3) |
 | 1. Rule baseline (jev margin + novelty) | Not started |
 | 2. Gradient boosting + calibration | Not started |
 | 3. Small neural judge | Only if stage 2 plateaus |
@@ -30,8 +30,9 @@ Full design: [`docs/training-design.md`](docs/training-design.md).
 
 ```text
 src/uncertainty_judge/
-  contracts.py     Pydantic v2 contracts: Severity, *Signals, *Record, *Label, JudgeScore
+  contracts.py     Pydantic v2 contracts: Severity, *Signals, *Record, *Label, MergeRecord, JudgeScore
   decision_log.py  Append-only, write-once log of judge inputs (JSON Lines)
+  dataset.py       Label rules (observation window, as_of cut-off) and the time split
   routing.py       RoutingPolicy and route_finding / route_zone
 tests/           One test per policy-table cell and per label rule
 docs/            Training design
@@ -53,6 +54,26 @@ log.log_finding(record)  # FindingRecord built from the live pipeline
 The log rejects a record logged more than `max_lag` (default 15 minutes) away from its `decided_at`, treats an identical
 retry as a no-op, and refuses a second, different record for the same `(pr_id, head_sha, finding_id | zone_id)`.
 It assumes a single writer per file.
+
+## Building the dataset
+
+```python
+from uncertainty_judge import build_finding_examples, time_split
+
+examples = build_finding_examples(
+    log.findings(), labels, merges, observation_window=timedelta(days=30), as_of=now
+)
+split = time_split(examples, calibration_start=..., test_start=...)
+```
+
+- A real correction (severity changed, dismissed, incident, reopened PR) labels a decision as wrong as soon as it is
+  known; for a shipped decision it must arrive before the observation window closes.
+- With no correction, a decision becomes "correct" only after it shipped and its window (counted from the merge)
+  closed. Undecided rows stay out.
+- Nothing recorded after `as_of` is used, so a dataset can be rebuilt exactly as it looked on any past date.
+- `time_split` splits by `decided_at`, never at random.
+
+The 30-day window above is a placeholder until #3 is answered.
 
 ## Development
 

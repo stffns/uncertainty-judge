@@ -7,11 +7,21 @@ from uncertainty_judge.contracts import (
     FindingSignals,
     JudgeMode,
     JudgeScore,
+    MergeRecord,
     Severity,
     ZoneLabel,
     ZoneOutcome,
     ZoneRecord,
     ZoneSignals,
+)
+from uncertainty_judge.dataset import (
+    FindingExample,
+    LabelSource,
+    TimeSplit,
+    ZoneExample,
+    build_finding_examples,
+    build_zone_examples,
+    time_split,
 )
 from uncertainty_judge.decision_log import (
     CorruptLogError,
@@ -25,6 +35,14 @@ from uncertainty_judge.decision_log import (
 from uncertainty_judge.routing import RiskBand, RouteAction, RoutingPolicy, route_finding, route_zone
 
 __all__ = [
+    "time_split",
+    "build_zone_examples",
+    "build_finding_examples",
+    "ZoneExample",
+    "TimeSplit",
+    "MergeRecord",
+    "LabelSource",
+    "FindingExample",
     "CorruptLogError",
     "DecisionLog",
     "DecisionLogError",

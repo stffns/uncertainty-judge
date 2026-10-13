@@ -121,7 +121,9 @@ def test_zone_signals_reject_negative_counts() -> None:
 )
 def test_finding_label_targets(outcome: FindingOutcome, gap: int | None, is_wrong: bool) -> None:
     """Every outcome except 'stood' is a wrong decision."""
-    label = FindingLabel(finding_id="f-1", outcome=outcome, severity_gap=gap, labeled_at=NOW)
+    label = FindingLabel(
+        pr_id="pr-1", head_sha=SHA, finding_id="f-1", outcome=outcome, severity_gap=gap, labeled_at=NOW
+    )
     assert label.is_wrong is is_wrong
 
 
@@ -138,13 +140,20 @@ def test_finding_label_targets(outcome: FindingOutcome, gap: int | None, is_wron
 def test_finding_label_rejects_inconsistent_gap(outcome: FindingOutcome, gap: int | None) -> None:
     """The severity gap must agree with the outcome it describes."""
     with pytest.raises(ValidationError):
-        FindingLabel(finding_id="f-1", outcome=outcome, severity_gap=gap, labeled_at=NOW)
+        FindingLabel(pr_id="pr-1", head_sha=SHA, finding_id="f-1", outcome=outcome, severity_gap=gap, labeled_at=NOW)
 
 
 def test_finding_label_gap_is_bounded() -> None:
     """There are only four severities, so a gap beyond three steps is impossible."""
     with pytest.raises(ValidationError):
-        FindingLabel(finding_id="f-1", outcome=FindingOutcome.SEVERITY_CHANGED, severity_gap=4, labeled_at=NOW)
+        FindingLabel(
+            pr_id="pr-1",
+            head_sha=SHA,
+            finding_id="f-1",
+            outcome=FindingOutcome.SEVERITY_CHANGED,
+            severity_gap=4,
+            labeled_at=NOW,
+        )
 
 
 @pytest.mark.parametrize(
@@ -158,7 +167,10 @@ def test_finding_label_gap_is_bounded() -> None:
 )
 def test_zone_label_target(outcome: ZoneOutcome, expected: bool) -> None:
     """Only bugs the review did not report count as positives."""
-    assert ZoneLabel(zone_id="z-1", outcome=outcome, labeled_at=NOW).has_unreported_bug is expected
+    assert (
+        ZoneLabel(pr_id="pr-1", head_sha=SHA, zone_id="z-1", outcome=outcome, labeled_at=NOW).has_unreported_bug
+        is expected
+    )
 
 
 def test_judge_score_risk_is_a_probability() -> None:
