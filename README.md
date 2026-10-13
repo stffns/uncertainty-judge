@@ -22,7 +22,8 @@ Full design: [`docs/training-design.md`](docs/training-design.md).
 | Routing policy (per-severity thresholds) | Done, tested; thresholds still to tune |
 | Decision log (signals at decision time) | Done, tested; not yet wired into the pipeline |
 | Labeled dataset + time split | Done, tested; window length pending (#3) |
-| 1. Rule baseline (jev margin + novelty) | Not started |
+| 1. Rule baseline (jev margin + novelty), finding mode | Done, tested; thresholds to set on real data |
+| Calibration (isotonic) + evaluation metrics | Done, tested |
 | 2. Gradient boosting + calibration | Not started |
 | 3. Small neural judge | Only if stage 2 plateaus |
 
@@ -33,6 +34,9 @@ src/uncertainty_judge/
   contracts.py     Pydantic v2 contracts: Severity, *Signals, *Record, *Label, MergeRecord, JudgeScore
   decision_log.py  Append-only, write-once log of judge inputs (JSON Lines)
   dataset.py       Label rules (observation window, as_of cut-off) and the time split
+  calibration.py   Isotonic calibrator: raw score -> probability, smoothed toward the base rate
+  baseline.py      Stage 1 rule baseline: jev margin + novelty thresholds, calibrated
+  evaluation.py    AUROC, ECE, risk-coverage, over-rating and blocker miss rate, per severity
   routing.py       RoutingPolicy and route_finding / route_zone
 tests/           One test per policy-table cell and per label rule
 docs/            Training design
@@ -60,9 +64,7 @@ It assumes a single writer per file.
 ```python
 from uncertainty_judge import build_finding_examples, time_split
 
-examples = build_finding_examples(
-    log.findings(), labels, merges, observation_window=timedelta(days=30), as_of=now
-)
+examples = build_finding_examples(log.findings(), labels, merges, observation_window=timedelta(days=30), as_of=now)
 split = time_split(examples, calibration_start=..., test_start=...)
 ```
 
@@ -74,6 +76,28 @@ split = time_split(examples, calibration_start=..., test_start=...)
 - `time_split` splits by `decided_at`, never at random.
 
 The 30-day window above is a placeholder until #3 is answered.
+
+## Rule baseline (stage 1)
+
+```python
+from uncertainty_judge import BaselineRules, RuleBaselineJudge, evaluate_findings
+
+rules = BaselineRules(margin_below=0.2, confidence_below=0.6, novelty_above=0.7)  # fixed, not learned
+judge = RuleBaselineJudge.fit(rules, split.calibration, model_version="rule-baseline-v1")
+risks = [judge.score(e.decision.record).risk for e in split.test]
+report = evaluate_findings(split.test, risks, escalation_budget=0.10)
+```
+
+The rules count how many signals fire (doubtful jev margin, novel case), giving a raw score of 0, 1 or 2. Calibration
+on the calibration split turns that into a probability. `evaluate_findings` reports every metric overall and per
+severity; this report is the bar later stages must beat.
+
+Known limit: three risk levels are coarse. On synthetic data where a third of decisions share the middle level, a 25%
+escalation budget can only use 5.5%, because escalating the next level would overshoot it. A continuous score
+(stage 2) can spend the budget fully.
+
+Zone mode has no baseline yet: the design names jev margin, a finding-mode signal, so the zone rules are an open
+design question.
 
 ## Development
 

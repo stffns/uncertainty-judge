@@ -40,6 +40,18 @@ class Severity(StrEnum):
         """Position of the severity on the ordinal scale (``nit`` = 0, ``blocker`` = 3)."""
         return list(Severity).index(self)
 
+    @classmethod
+    def from_rank(cls, rank: int) -> Severity:
+        """Return the severity at an ordinal position.
+
+        Raises:
+            ValueError: If ``rank`` is outside the scale.
+        """
+        members = list(cls)
+        if not 0 <= rank < len(members):
+            raise ValueError(f"severity rank must be in [0, {len(members) - 1}], got {rank}")
+        return members[rank]
+
 
 class JudgeMode(StrEnum):
     """The two modes the judge runs in."""

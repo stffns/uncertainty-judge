@@ -17,14 +17,16 @@ from __future__ import annotations
 from collections.abc import Callable, Hashable, Iterable
 from datetime import datetime, timedelta
 from enum import StrEnum
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from uncertainty_judge.contracts import (
     Contract,
     FindingLabel,
     FindingOutcome,
     MergeRecord,
+    Severity,
     SeverityGap,
     ZoneLabel,
     ZoneOutcome,
@@ -46,17 +48,40 @@ class FindingExample(Contract):
     """A labeled finding-mode example."""
 
     decision: LoggedFinding
-    is_wrong: bool
+    outcome: FindingOutcome
     severity_gap: SeverityGap | None
     source: LabelSource
+
+    @property
+    def is_wrong(self) -> bool:
+        """Primary binary target: the decision did not stand."""
+        return self.outcome is not FindingOutcome.STOOD
+
+    @property
+    def corrected_severity(self) -> Severity | None:
+        """Severity the outcome supports, or None when unknown (dismissed, or under-rated with no gap recorded)."""
+        if self.outcome is FindingOutcome.DISMISSED_FALSE_POSITIVE or self.severity_gap is None:
+            return None
+        return Severity.from_rank(self.decision.record.final_severity.rank + self.severity_gap)
+
+    @model_validator(mode="after")
+    def _gap_fits_the_scale(self) -> Self:
+        """Reject a gap that would move the final severity off the scale."""
+        _ = self.corrected_severity
+        return self
 
 
 class ZoneExample(Contract):
     """A labeled zone-mode example."""
 
     decision: LoggedZone
-    has_unreported_bug: bool
+    outcome: ZoneOutcome
     source: LabelSource
+
+    @property
+    def has_unreported_bug(self) -> bool:
+        """Binary target: a real or seeded bug in the zone went unreported by the review."""
+        return self.outcome in (ZoneOutcome.ESCAPED_BUG, ZoneOutcome.MUTANT_MISSED)
 
 
 class TimeSplit[E: BaseModel](BaseModel):
@@ -110,12 +135,20 @@ def build_finding_examples(
         ):
             examples.append(
                 FindingExample(
-                    decision=decision, is_wrong=True, severity_gap=label.severity_gap, source=LabelSource.OUTCOME
+                    decision=decision,
+                    outcome=label.outcome,
+                    severity_gap=label.severity_gap,
+                    source=LabelSource.OUTCOME,
                 )
             )
         elif window_end is not None and window_end <= as_of:
             examples.append(
-                FindingExample(decision=decision, is_wrong=False, severity_gap=0, source=LabelSource.WINDOW_CLOSED)
+                FindingExample(
+                    decision=decision,
+                    outcome=FindingOutcome.STOOD,
+                    severity_gap=0,
+                    source=LabelSource.WINDOW_CLOSED,
+                )
             )
     return examples
 
@@ -161,11 +194,9 @@ def build_zone_examples(
             and label.outcome is not ZoneOutcome.CLEAN
             and _counts(label.labeled_at, window_end, as_of)
         ):
-            examples.append(
-                ZoneExample(decision=decision, has_unreported_bug=label.has_unreported_bug, source=LabelSource.OUTCOME)
-            )
+            examples.append(ZoneExample(decision=decision, outcome=label.outcome, source=LabelSource.OUTCOME))
         elif window_end is not None and window_end <= as_of:
-            examples.append(ZoneExample(decision=decision, has_unreported_bug=False, source=LabelSource.WINDOW_CLOSED))
+            examples.append(ZoneExample(decision=decision, outcome=ZoneOutcome.CLEAN, source=LabelSource.WINDOW_CLOSED))
     return examples
 
 

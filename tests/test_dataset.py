@@ -236,7 +236,8 @@ def test_time_split_uses_decision_time_boundaries() -> None:
         _finding("f-train-2", decided_at=calibration_start - timedelta(seconds=1)),
     ]
     examples = [
-        FindingExample(decision=d, is_wrong=False, severity_gap=0, source=LabelSource.WINDOW_CLOSED) for d in decisions
+        FindingExample(decision=d, outcome=FindingOutcome.STOOD, severity_gap=0, source=LabelSource.WINDOW_CLOSED)
+        for d in decisions
     ]
     split = time_split(examples, calibration_start=calibration_start, test_start=test_start)
     assert [e.decision.record.finding_id for e in split.train] == ["f-train", "f-train-2"]
