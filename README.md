@@ -20,7 +20,7 @@ Full design: [`docs/training-design.md`](docs/training-design.md).
 | --- | --- |
 | Contracts (signals, records, labels, scores) | Done, tested |
 | Routing policy (per-severity thresholds) | Done, tested; thresholds still to tune |
-| Signal logging at decision time | Not started |
+| Decision log (signals at decision time) | Done, tested; not yet wired into the pipeline |
 | Labeled dataset + time split | Blocked on open questions |
 | 1. Rule baseline (jev margin + novelty) | Not started |
 | 2. Gradient boosting + calibration | Not started |
@@ -30,11 +30,29 @@ Full design: [`docs/training-design.md`](docs/training-design.md).
 
 ```text
 src/uncertainty_judge/
-  contracts.py   Pydantic v2 contracts: Severity, *Signals, *Record, *Label, JudgeScore
-  routing.py     RoutingPolicy and route_finding / route_zone
+  contracts.py     Pydantic v2 contracts: Severity, *Signals, *Record, *Label, JudgeScore
+  decision_log.py  Append-only, write-once log of judge inputs (JSON Lines)
+  routing.py       RoutingPolicy and route_finding / route_zone
 tests/           One test per policy-table cell and per label rule
 docs/            Training design
 ```
+
+## Logging decisions
+
+Signals must be logged when the decision is made; rebuilding them later leaks information the judge never had.
+
+```python
+from pathlib import Path
+
+from uncertainty_judge import DecisionLog
+
+log = DecisionLog(Path("data/decisions.jsonl"))
+log.log_finding(record)  # FindingRecord built from the live pipeline
+```
+
+The log rejects a record logged more than `max_lag` (default 15 minutes) away from its `decided_at`, treats an identical
+retry as a no-op, and refuses a second, different record for the same `(pr_id, head_sha, finding_id | zone_id)`.
+It assumes a single writer per file.
 
 ## Development
 

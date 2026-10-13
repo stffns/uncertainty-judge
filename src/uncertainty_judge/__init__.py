@@ -13,9 +13,25 @@ from uncertainty_judge.contracts import (
     ZoneRecord,
     ZoneSignals,
 )
+from uncertainty_judge.decision_log import (
+    CorruptLogError,
+    DecisionLog,
+    DecisionLogError,
+    DuplicateDecisionError,
+    LateLoggingError,
+    LoggedFinding,
+    LoggedZone,
+)
 from uncertainty_judge.routing import RiskBand, RouteAction, RoutingPolicy, route_finding, route_zone
 
 __all__ = [
+    "CorruptLogError",
+    "DecisionLog",
+    "DecisionLogError",
+    "DuplicateDecisionError",
+    "LateLoggingError",
+    "LoggedFinding",
+    "LoggedZone",
     "FindingLabel",
     "FindingOutcome",
     "FindingRecord",

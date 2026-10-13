@@ -6,11 +6,10 @@ enriched later (see "Dataset rules" in ``docs/training-design.md``).
 
 from __future__ import annotations
 
-from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Self
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, computed_field, model_validator
 
 Probability = Annotated[float, Field(ge=0.0, le=1.0)]
 """A value in the closed interval [0, 1]."""
@@ -18,8 +17,11 @@ Probability = Annotated[float, Field(ge=0.0, le=1.0)]
 SeverityGap = Annotated[int, Field(ge=-3, le=3)]
 """Signed distance in severity steps between two decisions (nit -> blocker is 3)."""
 
+CommitSha = Annotated[str, Field(pattern=r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")]
+"""Full, lowercase git commit hash (SHA-1 or SHA-256). Abbreviated hashes would split one decision key in two."""
 
-class _Contract(BaseModel):
+
+class Contract(BaseModel):
     """Base for all contracts: immutable and strict about unknown fields."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -46,7 +48,7 @@ class JudgeMode(StrEnum):
     ZONE = "zone"
 
 
-class FindingSignals(_Contract):
+class FindingSignals(Contract):
     """Input signals for finding mode, logged at decision time.
 
     ``jev_margin`` and ``jev_confidence`` are both optional because it is still open whether jev exposes per-severity
@@ -73,7 +75,7 @@ class FindingSignals(_Contract):
         return self
 
 
-class ZoneSignals(_Contract):
+class ZoneSignals(Contract):
     """Input signals for zone mode, logged at decision time.
 
     Zone mode must stay independent of the review output, so nothing derived from the reviewer or jev belongs here.
@@ -90,12 +92,13 @@ class ZoneSignals(_Contract):
     )
 
 
-class FindingRecord(_Contract):
+class FindingRecord(Contract):
     """One finding-mode row: a single final severity decision and the signals seen when it was made."""
 
     pr_id: str = Field(min_length=1)
     finding_id: str = Field(min_length=1)
-    decided_at: datetime
+    head_sha: CommitSha = Field(description="PR head commit the decision was made on.")
+    decided_at: AwareDatetime
     reviewer_severity: Severity
     final_severity: Severity
     signals: FindingSignals
@@ -107,12 +110,13 @@ class FindingRecord(_Contract):
         return self.final_severity.rank - self.reviewer_severity.rank
 
 
-class ZoneRecord(_Contract):
+class ZoneRecord(Contract):
     """One zone-mode row: a changed file or hunk and the signals seen when the PR was reviewed."""
 
     pr_id: str = Field(min_length=1)
     zone_id: str = Field(min_length=1, description="Stable identifier of the file or hunk.")
-    decided_at: datetime
+    head_sha: CommitSha = Field(description="PR head commit the decision was made on.")
+    decided_at: AwareDatetime
     signals: ZoneSignals
 
 
@@ -125,7 +129,7 @@ class FindingOutcome(StrEnum):
     UNDERRATED_CAUSED_INCIDENT = "underrated_caused_incident"
 
 
-class FindingLabel(_Contract):
+class FindingLabel(Contract):
     """Outcome label for a finding-mode row. Labels come from real outcomes, never from another model."""
 
     finding_id: str = Field(min_length=1)
@@ -134,7 +138,7 @@ class FindingLabel(_Contract):
         default=None,
         description="Second target: corrected minus final severity in steps. None when the finding was dismissed.",
     )
-    labeled_at: datetime
+    labeled_at: AwareDatetime
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -166,12 +170,12 @@ class ZoneOutcome(StrEnum):
     MUTANT_MISSED = "mutant_missed"
 
 
-class ZoneLabel(_Contract):
+class ZoneLabel(Contract):
     """Outcome label for a zone-mode row."""
 
     zone_id: str = Field(min_length=1)
     outcome: ZoneOutcome
-    labeled_at: datetime
+    labeled_at: AwareDatetime
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -180,7 +184,7 @@ class ZoneLabel(_Contract):
         return self.outcome in (ZoneOutcome.ESCAPED_BUG, ZoneOutcome.MUTANT_MISSED)
 
 
-class JudgeScore(_Contract):
+class JudgeScore(Contract):
     """Calibrated output of the judge for one finding or zone."""
 
     mode: JudgeMode
